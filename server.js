@@ -382,7 +382,6 @@ app.get('/', (req, res) => {
       <div class="config-item">
         <div class="label">Monitored tags</div>
         <div class="value tag">
-          <span class="tag-pill">LTL</span>
           <span class="tag-pill">Oversize Ground</span>
         </div>
       </div>
