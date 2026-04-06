@@ -128,13 +128,36 @@ async function pollActiveShipments() {
       });
 
       // FreightClub returns an array of tracking events, sorted chronologically.
-      // When querying by customerNumber, FC may return events from multiple shipments
-      // (e.g. if the same PO was reused). Filter to the most recent ShipmentNumber.
-      const allEvents = Array.isArray(tracking) ? tracking : [];
-      const latestShipmentNum = allEvents.reduce(
+      // When querying by customerNumber, FC may return events from OTHER FC customers
+      // who used the same order number in the past. Filter by date first to exclude
+      // stale events that predate our shipment, then pick the latest ShipmentNumber.
+      const rawEvents = Array.isArray(tracking) ? tracking : [];
+
+      // Parse FC date format (MM/DD/YYYY HH:mm:ss) and filter to events after our shipment was created
+      // Use a 1-day buffer before createdAt to account for timezone differences
+      const createdThreshold = new Date(new Date(info.createdAt).getTime() - 24 * 60 * 60 * 1000);
+      const recentEvents = rawEvents.filter((e) => {
+        if (!e.Date) return false;
+        const parts = e.Date.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+        if (!parts) return false;
+        const eventDate = new Date('' + parts[3] + '-' + parts[1] + '-' + parts[2]);
+        return eventDate >= createdThreshold;
+      });
+
+      if (!recentEvents.length) {
+        logger.debug('No recent tracking events for shipment (all events predate our registration)', {
+          shipmentId,
+          totalEvents: rawEvents.length,
+          createdAt: info.createdAt,
+        });
+        continue;
+      }
+
+      // From recent events, pick the latest ShipmentNumber
+      const latestShipmentNum = recentEvents.reduce(
         (max, e) => Math.max(max, e.ShipmentNumber || 0), 0
       );
-      const events = allEvents.filter(
+      const events = recentEvents.filter(
         (e) => e.ShipmentNumber === latestShipmentNum
       );
 
