@@ -268,6 +268,16 @@ const events = recentEvents.filter(
             await shopify.updateOrderMetafield(info.shopifyOrderId, 'fc_tracking_url', trackingUrl);
           }
 
+          // Update fc_shipment_number to the booked one (may differ from the original quote)
+          if (String(latestShipmentNum) !== String(shipmentId)) {
+            await shopify.updateOrderMetafield(info.shopifyOrderId, 'fc_shipment_number', String(latestShipmentNum));
+            logger.info('Updated fc_shipment_number metafield (quote -> booked)', {
+              shipmentId,
+              bookedShipmentNumber: latestShipmentNum,
+              shopifyOrderId: info.shopifyOrderId,
+            });
+          }
+
           // Mark as saved so we don't re-write every poll cycle
           shipments[shipmentId].trackingSaved = true;
           saveShipments(shipments);
@@ -285,6 +295,17 @@ const events = recentEvents.filter(
             message: err.message,
           });
         }
+      }
+
+      // Update fc_status on every poll cycle so it stays current as shipment progresses
+      try {
+        await shopify.updateOrderMetafield(info.shopifyOrderId, 'fc_status', latestStatus.trim());
+      } catch (err) {
+        logger.error('Failed to update fc_status metafield', {
+          shipmentId,
+          shopifyOrderId: info.shopifyOrderId,
+          message: err.message,
+        });
       }
 
       // Fulfill as soon as we have a real tracking number so Shopify triggers
