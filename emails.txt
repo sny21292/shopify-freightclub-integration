@@ -1,0 +1,144 @@
+Hi Cole,
+
+Quick update on the FreightClub integration:
+
+I've set up a new web app on the Digital Ocean server and created the basic project structure for the integration. I also set up a new subdomain — https://freightclub-turnoffroad.duckdns.org — which will handle the webhooks.
+
+However, when I tried to add a webhook in Shopify under Settings, I got a “you do not have permission to view this page” error. Could you grant me admin access on Shopify so I can configure the webhooks? Alternatively, if you’d prefer not to give full admin access.
+
+I have a few things to update you on and a couple of questions that will help me build this correctly:
+
+1. SKU-Based Dimensions — I’m researching whether FreightClub can match product dimensions directly using SKUs on their end, which would simplify things significantly. I’ll update you on what I find.
+
+2. Rate Selection — Understand that you want to be able to review and pick the carrier yourself, and not always go with the cheapest option. The system will fetch all available rates and carriers from FreightClub, default to the lowest price, but will NOT auto-book. You’ll get to review everything and make the final call before anything is booked.
+
+3. Booking & Tracking Workflow — Just to clarify how the full flow will work:
+   • Order comes in → System fetches rates from FreightClub
+   • You review the rates and pick a carrier through an email or any prefered route
+   • Once you confirm → System books the shipment with FreightClub
+   • After booking → FreightClub provides tracking info → System updates Shopify fulfillment automatically
+   Nothing gets booked or fulfilled until you approve it.
+
+or you want to go with the approach where it will automatically book the first rate that it gets ?
+
+4. Two-Tier Shipping at Checkout — This is the one I need your input on. You mentioned two options for customers:
+   • Option A: Free Shipping (via FreightClub)
+   • Option B: $199 Ship with Premier Carrier
+
+   Right now when I test checkout with an LTL/oversized product, I only see a single “Free Shipping” option. So these two tiers aren’t set up yet  ?
+
+
+Thanks,
+Sunil Kumar
+Web Developer
+
+
+re: #4, the option only appears when you have a hard top right now: 
+
+image.png
+Standard Freight (Free)
+
+Economy LTL carriers
+Transit: 8–12 days
+Returned to Intuitive Shipping but overridden to $0
+Premier Freight
+
+
+Only FedEx Freight and Estes
+Transit: 4–7 days
+We charge customers $250 for the upgrade.
+
+So I think we need two freight club setups: 
+
+Name: Standard Freight
+Carriers: Economy LTL
+
+Name: Premier Freight
+Carriers: FedEx Freight, Estes
+
+------
+
+
+Currently, if there is a non LTL item in the cart it shows all rates together, I think you mentioned above potentially splitting that. Let me know if there's any changes I can make in Intuitive Shipping.
+
+image.png
+
+
+
+Subject: Re: FreightClub Integration — Approach Confirmation
+
+Hi Cole and Justin
+
+Thanks for the screenshots and details — and thanks for the clarification on Intuitive Shipping. That really helped clear things up.
+
+Now I have a much better picture of how this should work. Let me lay out the approach so we're aligned:
+
+How the Integration Will Work:
+
+1. A customer places an order on the store
+2. Shopify sends a webhook to our server
+3. Our system checks the order:
+   • Looks at the products — are any tagged as LTL/oversized/freight-eligible?
+   • If NO freight products → ignore the order (ShipStation handles it as usual)
+   • If YES freight products → check the shipping method the customer selected
+
+4. Based on the shipping method:
+   • "Free Freight Shipping" → Fetch rates from FreightClub using Economy LTL carriers
+   • "Premier Carrier Delivery" → Fetch rates from FreightClub but only FedEx Freight and Estes
+
+5. Rates are fetched and ready for review
+
+6. You pick a carrier → System books with FreightClub → Tracking is sent to Shopify → Customer gets their shipping notification
+
+Now for step 5 and 6, I have two options for how you'd review and approve the rates:
+
+Option A: Auto-Book (Fastest to Build)
+The system automatically selects the lowest-priced carrier matching the tier (Economy LTL for free shipping, FedEx Freight/Estes for Premier) and books immediately. No manual review needed. This is the quickest to build and fully hands-off.
+
+Option B: Notification + Approval Dashboard (Takes More Time)
+The system fetches rates but does NOT auto-book. Instead:
+   • You receive an email/Slack notification saying "New freight order #1234 — 3 rates available"
+   • You go to a simple dashboard page where you see the pending orders with all available rates, carriers, prices, and transit times
+   • You pick the one you want and click "Book"
+   • System books with FreightClub and handles the rest
+
+This gives you full control (like you mentioned — sometimes you'd pick the better carrier over the cheapest one), but it takes more development time to build the dashboard.
+
+
+Let me know which option you'd prefer and I'll finalize the estimate and get started.
+
+Thanks,
+Sunil Kumar
+Web Developer
+
+
+
+Hey Sunil,
+
+We should be able to just book these directly in Freight Club correct? I don't think that we need a custom system to book from. 
+
+I think it'd work even simpler if we just did it straight from the Freight Club dashboard rather than creating our own dashboard if there is a way to tag or notify us that the customer chose the upgraded shipping option. 
+
+Let me know what you think. 
+
+
+
+Hi Cole,
+
+That makes total sense — keeping the booking in FreightClub's own dashboard is much simpler. No need to build a custom booking system on our end.
+
+So the updated plan is:
+1. Customer places an order with a freight product
+2. Our system picks up the order, detects it's freight-eligible, and calls FreightClub's API to create the shipment with rates
+3. You get a notification with the order details, shipping tier (Standard or Premier), and the FreightClub shipment number
+4. You open FreightClub's dashboard, find the shipment, pick your carrier, and book
+
+I'm currently testing this end-to-end with a live product to make sure the shipment actually shows up in FreightClub's dashboard after our API call creates it. I'll let you know how that goes.
+
+One thing I need from your end:
+1. Shopify Permissions — My current admin access doesn't have sufficient permissions to add webhook URLs or create a new app for this integration. Could you update my access to full admin for 2 or 3 days and then you can restrict it again if you want.
+
+I'll update you once I've finished testing.
+
+Thanks,
+Sunil
