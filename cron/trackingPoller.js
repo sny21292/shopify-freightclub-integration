@@ -133,6 +133,24 @@ async function pollActiveShipments() {
       // stale events that predate our shipment, then pick the latest ShipmentNumber.
       const rawEvents = Array.isArray(tracking) ? tracking : [];
 
+      // --- Detailed logging: raw FC response ---
+      const uniqueShipmentNums = [...new Set(rawEvents.map(e => e.ShipmentNumber).filter(Boolean))];
+      logger.info("FC tracking response", {
+        shipmentId,
+        orderName: info.shopifyOrderName,
+        customerNumber: info.shopifyOrderNumber,
+        totalRawEvents: rawEvents.length,
+        uniqueShipmentNumbers: uniqueShipmentNums,
+        rawEventSample: rawEvents.slice(0, 3).map(e => ({
+          ShipmentNumber: e.ShipmentNumber,
+          Date: e.Date,
+          TrackingCategory: e.TrackingCategory,
+          Description: e.Description,
+          TrackingNumber: e.TrackingNumber,
+          CarrierCode: e.CarrierCode,
+        })),
+      });
+
       // Parse FC date format (MM/DD/YYYY HH:mm:ss) and filter to events after our shipment was created
       // Use a 1-day buffer before createdAt to account for timezone differences
       const createdThreshold = new Date(new Date(info.createdAt).getTime() - 24 * 60 * 60 * 1000);
@@ -143,6 +161,21 @@ async function pollActiveShipments() {
         const eventDate = new Date('' + parts[3] + '-' + parts[1] + '-' + parts[2]);
         return eventDate >= createdThreshold;
       });
+
+      // --- Detailed logging: date filter results ---
+      const filteredOutCount = rawEvents.length - recentEvents.length;
+      if (filteredOutCount > 0) {
+        logger.info("Date filter applied", {
+          shipmentId,
+          orderName: info.shopifyOrderName,
+          createdAt: info.createdAt,
+          createdThreshold: createdThreshold.toISOString(),
+          totalRaw: rawEvents.length,
+          passedFilter: recentEvents.length,
+          filteredOut: filteredOutCount,
+          oldestFilteredDate: rawEvents.filter(e => !recentEvents.includes(e)).map(e => e.Date).sort()[0],
+        });
+      }
 
       if (!recentEvents.length) {
         logger.debug('No recent tracking events for shipment (all events predate our registration)', {
@@ -157,9 +190,20 @@ async function pollActiveShipments() {
       const latestShipmentNum = recentEvents.reduce(
         (max, e) => Math.max(max, e.ShipmentNumber || 0), 0
       );
-      const events = recentEvents.filter(
+const events = recentEvents.filter(
         (e) => e.ShipmentNumber === latestShipmentNum
       );
+
+      // --- Detailed logging: shipment number selection ---
+      if (uniqueShipmentNums.length > 1) {
+        logger.info("Multiple shipment numbers found — using latest", {
+          shipmentId,
+          orderName: info.shopifyOrderName,
+          allShipmentNumbers: uniqueShipmentNums,
+          selectedShipmentNumber: latestShipmentNum,
+          eventsForSelected: events.length,
+        });
+      }
 
       if (!events.length) {
         logger.debug('No tracking events yet for shipment', { shipmentId });
