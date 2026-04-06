@@ -225,21 +225,33 @@ async function pollActiveShipments() {
       // Shopify auto-polls the carrier for status updates after fulfillment.
       if (!info.fulfilled) {
         try {
-          await shopify.fulfillOrder(info.shopifyOrderId, {
-            tracking_number: trackingNumber,
-            tracking_url: trackingUrl,
-            tracking_company: carrier,
-          });
+          // Check if order was already fulfilled on Shopify (e.g. manually by Cole's team)
+          const order = await shopify.getOrder(info.shopifyOrderId);
+          if (order.fulfillment_status === 'fulfilled') {
+            logger.info('Order already fulfilled on Shopify (likely manual) — skipping', {
+              shipmentId,
+              shopifyOrderId: info.shopifyOrderId,
+              shopifyOrderName: info.shopifyOrderName,
+            });
+            shipments[shipmentId].fulfilled = true;
+            saveShipments(shipments);
+          } else {
+            await shopify.fulfillOrder(info.shopifyOrderId, {
+              tracking_number: trackingNumber,
+              tracking_url: trackingUrl,
+              tracking_company: carrier,
+            });
 
-          shipments[shipmentId].fulfilled = true;
-          saveShipments(shipments);
+            shipments[shipmentId].fulfilled = true;
+            saveShipments(shipments);
 
-          logger.info('Shopify order fulfilled with tracking — customer shipping emails will be sent by Shopify', {
-            shopifyOrderId: info.shopifyOrderId,
-            shopifyOrderName: info.shopifyOrderName,
-            trackingNumber,
-            carrier,
-          });
+            logger.info('Shopify order fulfilled with tracking — customer shipping emails will be sent by Shopify', {
+              shopifyOrderId: info.shopifyOrderId,
+              shopifyOrderName: info.shopifyOrderName,
+              trackingNumber,
+              carrier,
+            });
+          }
         } catch (err) {
           logger.error('Failed to fulfill Shopify order', {
             shipmentId,
