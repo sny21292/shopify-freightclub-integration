@@ -268,16 +268,6 @@ const events = recentEvents.filter(
             await shopify.updateOrderMetafield(info.shopifyOrderId, 'fc_tracking_url', trackingUrl);
           }
 
-          // Update fc_shipment_number to the booked one (may differ from the original quote)
-          if (String(latestShipmentNum) !== String(shipmentId)) {
-            await shopify.updateOrderMetafield(info.shopifyOrderId, 'fc_shipment_number', String(latestShipmentNum));
-            logger.info('Updated fc_shipment_number metafield (quote -> booked)', {
-              shipmentId,
-              bookedShipmentNumber: latestShipmentNum,
-              shopifyOrderId: info.shopifyOrderId,
-            });
-          }
-
           // Mark as saved so we don't re-write every poll cycle
           shipments[shipmentId].trackingSaved = true;
           saveShipments(shipments);
@@ -298,10 +288,32 @@ const events = recentEvents.filter(
       }
 
       // Update fc_status on every poll cycle so it stays current as shipment progresses
+      // Combined format: "TrackingCategory - Description" (e.g. "In Transit - Arrived at Facility")
       try {
-        await shopify.updateOrderMetafield(info.shopifyOrderId, 'fc_status', latestStatus.trim());
+        const statusText = trackingCategory && trackingCategory !== latestStatus.trim()
+          ? trackingCategory + ' - ' + latestStatus.trim()
+          : latestStatus.trim();
+        await shopify.updateOrderMetafield(info.shopifyOrderId, 'fc_status', statusText);
       } catch (err) {
         logger.error('Failed to update fc_status metafield', {
+          shipmentId,
+          shopifyOrderId: info.shopifyOrderId,
+          message: err.message,
+        });
+      }
+
+      // Update fc_shipment_number to the booked one if it differs from the original quote
+      try {
+        if (String(latestShipmentNum) !== String(shipmentId)) {
+          await shopify.updateOrderMetafield(info.shopifyOrderId, 'fc_shipment_number', String(latestShipmentNum));
+          logger.info('Updated fc_shipment_number metafield (quote -> booked)', {
+            shipmentId,
+            bookedShipmentNumber: latestShipmentNum,
+            shopifyOrderId: info.shopifyOrderId,
+          });
+        }
+      } catch (err) {
+        logger.error('Failed to update fc_shipment_number metafield', {
           shipmentId,
           shopifyOrderId: info.shopifyOrderId,
           message: err.message,
