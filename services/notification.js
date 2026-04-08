@@ -36,10 +36,12 @@ async function notifyFreightOrder(params) {
     quoteCount,
   } = params;
 
-  const tierLabel =
-    shippingTier === 'Premier'
-      ? 'Premier Carrier Delivery ($250 upgrade) — FedEx Freight / Estes only, 4-7 days'
-      : 'Free Freight Shipping (Standard) — Economy LTL carriers, 8-12 days';
+  const tierLabels = {
+    Premier: 'Premier Carrier Delivery ($250 upgrade) — FedEx Freight / Estes only, 4-7 days',
+    Standard: 'Free Freight Shipping (Standard) — Economy LTL carriers, 8-12 days',
+    Unknown: 'Unknown — shipping tier could not be detected from order',
+  };
+  const tierLabel = tierLabels[shippingTier] || tierLabels.Unknown;
 
   const dashboardUrl = 'https://app.freightclub.com';
 

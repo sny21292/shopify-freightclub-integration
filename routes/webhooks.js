@@ -260,7 +260,38 @@ router.post('/shopify-order', verifyShopifyHmac, async (req, res) => {
         price: sl.price,
       })),
     });
-    const shippingTier = detectShippingTier(order.shipping_lines);
+    let shippingTier = detectShippingTier(order.shipping_lines);
+
+    // Fallback: if shipping_lines was empty in the webhook, re-fetch the order
+    // from Shopify API after a short delay (Shopify sometimes fires the webhook
+    // before shipping_lines is fully populated)
+    if (shippingTier === 'Unknown') {
+      logger.info('Shipping tier unknown — re-fetching order from Shopify API', { orderId: order.id });
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      try {
+        const freshOrder = await shopify.getOrder(order.id);
+        const freshTier = detectShippingTier(freshOrder.shipping_lines);
+        logger.info('Re-fetched shipping_lines', {
+          orderId: order.id,
+          shippingLines: (freshOrder.shipping_lines || []).map(sl => ({
+            title: sl.title,
+            code: sl.code,
+            source: sl.source,
+            price: sl.price,
+          })),
+          freshTier,
+        });
+        if (freshTier !== 'Unknown') {
+          shippingTier = freshTier;
+        }
+      } catch (err) {
+        logger.warn('Failed to re-fetch order for shipping tier fallback', {
+          orderId: order.id,
+          message: err.message,
+        });
+      }
+    }
+
     logger.info('Shipping tier detected', { orderId: order.id, shippingTier });
 
     // ---------------------------------------------------------------
